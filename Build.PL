@@ -3,7 +3,7 @@ use Module::Build;
 use strict;
 
 my $build = Module::Build->new(
-    module_name => 'Moose',
+    module_name => 'CGI::Application::Plugin::Phrasebook',
     license => 'perl',
     requires => {
         'Scalar::Util'       => '0',
