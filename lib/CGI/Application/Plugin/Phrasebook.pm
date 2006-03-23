@@ -10,7 +10,7 @@ use Scalar::Util 'blessed';
 use CGI::Application;
 use Data::Phrasebook;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 our @EXPORT = qw(
     config_phrasebook
@@ -28,12 +28,19 @@ sub import {
 
 sub config_phrasebook {
     my $self = shift;
-    $self->{'__PHRASEBOOK'}{'pb'} = Data::Phrasebook->new(@_);
+    unless (ref($_[0])) {
+        $self->{'__PHRASEBOOK'}{'pb'}{'__DEFAULT__'} = Data::Phrasebook->new(@_);
+        return;
+    }
+    foreach my $name (keys %{$_[0]}) {
+        $self->{'__PHRASEBOOK'}{'pb'}{$name} = Data::Phrasebook->new(%{$_[0]->{$name}});
+    }
 }
 
 sub phrasebook {
     my $self = shift;
-    return $self->{'__PHRASEBOOK'}{'pb'};
+    return $self->{'__PHRASEBOOK'}{'pb'}{'__DEFAULT__'} unless @_;
+    return $self->{'__PHRASEBOOK'}{'pb'}{$_[0]}; 
 }
 
 1;
@@ -72,25 +79,70 @@ CGI::Application::Plugin::Phrasebook - A CGI::Application plugin for Data::Phras
 
 =head1 DESCRIPTION
 
-This is a very simple plugin which provides access to an instance of 
-L<Data::Phrasebook> inside your L<CGI::Application>. I could have 
-just stuffed this in with C<param>, but this way is much nicer (and 
-easier to type).
+This is a very simple plugin which provides access to an instance 
+(or instances) of L<Data::Phrasebook> inside your L<CGI::Application>. 
+I could have just stuffed this in with C<param>, but this way is much 
+nicer (and easier to type).
 
 =head1 METHODS
 
 =over 4
 
-=item B<config_phrasebook (@phrasebook_args)>
+=item B<config_phrasebook (@phrasebook_args|\%multiple_phrasebooks)>
 
-This configures your L<Data::Phrasebook> instance by simply passing 
-any arguments onto C<Data::Phrasebook::new>. It then stashes it into 
-the L<CGI::Application> instance.
+Given an array of arguments, this configures your L<Data::Phrasebook> 
+instance by simply passing any arguments onto C<Data::Phrasebook::new>. 
+It then stashes it into the L<CGI::Application> instance.
 
-=item B<phrasebook>
+If given a HASH reference, this will configure multiple 
+L<Data::Phrasebook> instances, one for each hash key. Here is an 
+example, of how that would be used.
 
-This will return the L<Data::Phrasebook> instance, or undef if one 
-has not yet been configured.
+  package MyCGIApp;
+  
+  use base 'CGI::Application';
+  use CGI::Application::Plugin::Phrasebook;
+  
+  sub cgiapp_prerun {
+      my $self = shift;
+      $self->config_phrasebook({
+          my_yaml_phrasebook => { 
+              class  => 'Plain',
+              loader => 'YAML',
+              file   => 'conf/my_phrasebook.yml',        
+          },
+          my_txt_phrasebook => {
+              class  => 'Plain',
+              loader => 'Text',
+              file   => 'conf/my_phrasebook.txt',            
+          }
+      }); 
+      # ... do other stuff here ...
+  }
+  
+  sub some_run_mode {
+      my $self = shift;
+      return $self->phrasebook('my_yaml_phrasebook')->fetch('a_phrasebook_keyword');
+  }
+  
+  sub some_other_run_mode {
+      my $self = shift;
+      return $self->phrasebook('my_txt_phrasebook')->fetch('a_phrasebook_keyword');
+  }
+  
+You can also assign one of the hash keys to the string C<__DEFAULT__>, 
+and it will be used as the default phrasebook. But this behavior is 
+optional. 
+
+=item B<phrasebook (?$phrasebook_name)>
+
+This will return the L<Data::Phrasebook> instance, or C<undef> if one 
+has not yet been configured. 
+
+If the plugin has been configured with multiple phrasebooks, you can 
+specify the particular C<$phrasebook_name>, if one is not specified, 
+it will attempt to use the phrasebook called C<__DEFAULT__>. If the 
+phrasebook is not found, C<undef> is returned.
 
 =back
 
